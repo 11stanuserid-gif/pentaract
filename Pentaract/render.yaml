@@ -2,7 +2,7 @@ services:
   - type: web
     name: pentaract
     env: docker
-    dockerfilePath: ./Dockerfile
+    dockerfilePath: ./Dockerfile.render
     plan: free
     healthCheckPath: /
     envVars:
@@ -23,15 +23,15 @@ services:
       - key: CHANNEL_CAPACITY
         value: 100
       - key: SUPERUSER_EMAIL
-        value: admin@pentaract.com
+        value: admin@pentaract.io
       - key: SUPERUSER_PASS
-        value: ChangeThisPassword123!
+        value: Px9kL2mN7vQ4wR8tY5uI1oP3sA6dF0gH
       - key: ACCESS_TOKEN_EXPIRE_IN_SECS
         value: 3600
       - key: REFRESH_TOKEN_EXPIRE_IN_DAYS
         value: 7
       - key: SECRET_KEY
-        value: your-secret-key-change-this
+        value: bc117b7d93fafc8b78ddbb676916f84fdd0281305f8d052325d0922423374c01
       - key: TELEGRAM_API_BASE_URL
         value: https://api.telegram.org
       - key: TELEGRAM_RATE_LIMIT
