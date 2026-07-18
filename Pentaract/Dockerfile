@@ -1,7 +1,7 @@
 FROM rust:1.75 as builder
 
 WORKDIR /app
-COPY ./pentaract/ .
+COPY ./Pentaract/pentaract/ .
 RUN cargo build --release
 
 FROM debian:bookworm-slim
