@@ -28,93 +28,85 @@ get_token() {
 
 # Start session - download all files from cloud
 start_session() {
-    echo -e "${BLUE}🔄 Starting live session...${NC}"
+    echo -e "${BLUE}Starting live session...${NC}"
     TOKEN=$(get_token)
     
-    # List all cloud files
-    FILES=$(curl -s "$SERVER/api/storages/$STORAGE_ID/files" \
-        -H "Authorization: Bearer $TOKEN")
-    
-    echo "$FILES" | python3 -c "
+    # List all cloud files using tree endpoint
+    curl -s "$SERVER/api/storages/$STORAGE_ID/files/tree/" \
+        -H "Authorization: Bearer $TOKEN" | python3 -c "
 import sys, json
-data = json.load(sys.stdin)
-files = data if isinstance(data, list) else data.get('files', [])
-for f in files:
-    print(f.get('path', f.get('name', '')))
-" 2>/dev/null | while read -r filepath; do
-        if [ -n "$filepath" ]; then
-            echo -e "${GREEN}📥 Loading: $filepath${NC}"
+try:
+    data = json.load(sys.stdin)
+    if data:
+        for f in data:
+            print(f.get('name', ''))
+except: pass
+" 2>/dev/null | while read -r filename; do
+        if [ -n "$filename" ]; then
+            echo -e "${GREEN}Loading: $filename${NC}"
             # Download file content
-            CONTENT=$(curl -s "$SERVER/api/storages/$STORAGE_ID/files/$filepath" \
+            curl -s "$SERVER/api/storages/$STORAGE_ID/files/download/$filename" \
                 -H "Authorization: Bearer $TOKEN" \
-                -o - 2>/dev/null)
-            echo "$CONTENT" > "$WORKSPACE/$filepath" 2>/dev/null
+                -o "$WORKSPACE/$filename" 2>/dev/null
         fi
     done
     
-    echo -e "${GREEN}✅ Session started! Files in: $WORKSPACE${NC}"
-    echo -e "${YELLOW}📝 Work in: $WORKSPACE${NC}"
+    echo -e "${GREEN}Session started! Files in: $WORKSPACE${NC}"
+    echo -e "${YELLOW}Work in: $WORKSPACE${NC}"
     cd "$WORKSPACE"
 }
 
-# Sync - upload all changed files back to cloud
-sync() {
-    echo -e "${BLUE}🔄 Syncing to cloud...${NC}"
+# Upload file to cloud using multipart
+upload_file() {
+    local file="$1"
+    [ ! -f "$file" ] && echo -e "${RED}File not found: $file${NC}" && return 1
+    
     TOKEN=$(get_token)
+    local name=$(basename "$file")
+    echo -e "${GREEN}Uploading: $name${NC}"
     
-    find "$WORKSPACE" -type f | while read -r file; do
-        REL_PATH="${file#$WORKSPACE/}"
-        echo -e "${GREEN}📤 Uploading: $REL_PATH${NC}"
-        
-        curl -s -X POST "$SERVER/api/storages/$STORAGE_ID/files" \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{\"path\":\"$REL_PATH\",\"content\":\"$(cat "$file" | base64 -w0)\"}" \
-            > /dev/null 2>&1
-    done
+    local code=$(curl -s -o /dev/null -w "%{http_code}" \
+        -X POST "$SERVER/api/storages/$STORAGE_ID/files/upload" \
+        -H "Authorization: Bearer $TOKEN" \
+        -F "file=@$file" \
+        -F "path=/")
     
-    echo -e "${GREEN}✅ All files synced to cloud!${NC}"
+    [ "$code" = "201" ] && echo -e "${GREEN}Uploaded: $name${NC}" || echo -e "${RED}Failed (HTTP $code)${NC}"
 }
 
-# Save specific file
+# Sync - upload all local files to cloud
+sync() {
+    echo -e "${BLUE}Syncing to cloud...${NC}"
+    
+    find "$WORKSPACE" -type f | while read -r file; do
+        upload_file "$file"
+    done
+    
+    echo -e "${GREEN}All files synced to cloud!${NC}"
+}
+
+# Save specific file to cloud
 save() {
     local file="$1"
     [ -z "$file" ] && echo -e "${RED}Usage: save <filename>${NC}" && return 1
-    [ ! -f "$WORKSPACE/$file" ] && echo -e "${RED}File not found: $file${NC}" && return 1
+    [ ! -f "$WORKSPACE/$file" ] && echo -e "${RED}File not found in workspace: $file${NC}" && return 1
     
-    TOKEN=$(get_token)
-    echo -e "${GREEN}📤 Saving: $file${NC}"
-    
-    curl -s -X POST "$SERVER/api/storages/$STORAGE_ID/files" \
-        -H "Authorization: Bearer $TOKEN" \
-        -H "Content-Type: application/json" \
-        -d "{\"path\":\"$file\",\"content\":\"$(cat "$WORKSPACE/$file" | base64 -w0)\"}"
-    
-    echo -e "${GREEN}✅ Saved to cloud!${NC}"
+    upload_file "$WORKSPACE/$file"
 }
 
-# Load specific file
+# Load specific file from cloud
 load() {
     local file="$1"
     [ -z "$file" ] && echo -e "${RED}Usage: load <filename>${NC}" && return 1
     
     TOKEN=$(get_token)
-    echo -e "${GREEN}📥 Loading: $file${NC}"
+    echo -e "${GREEN}Loading: $file${NC}"
     
-    CONTENT=$(curl -s "$SERVER/api/storages/$STORAGE_ID/files/$file" \
+    curl -s "$SERVER/api/storages/$STORAGE_ID/files/download/$file" \
         -H "Authorization: Bearer $TOKEN" \
-        -o - 2>/dev/null)
+        -o "$WORKSPACE/$file" 2>/dev/null
     
-    echo "$CONTENT" > "$WORKSPACE/$file"
-    echo -e "${GREEN}✅ Loaded! Edit: nano $WORKSPACE/$file${NC}"
-}
-
-# End session - sync and cleanup
-end_session() {
-    echo -e "${YELLOW}🔄 Ending session...${NC}"
-    sync
-    rm -rf "$WORKSPACE"
-    echo -e "${GREEN}✅ Session ended! Phone storage freed!${NC}"
+    [ -f "$WORKSPACE/$file" ] && echo -e "${GREEN}Loaded! Edit: nano $WORKSPACE/$file${NC}" || echo -e "${RED}Failed${NC}"
 }
 
 # Create new file directly in cloud
@@ -123,37 +115,43 @@ create() {
     local content="$2"
     [ -z "$file" ] && echo -e "${RED}Usage: create <filename> <content>${NC}" && return 1
     
-    TOKEN=$(get_token)
-    echo -e "${GREEN}📝 Creating: $file${NC}"
-    
-    curl -s -X POST "$SERVER/api/storages/$STORAGE_ID/files" \
-        -H "Authorization: Bearer $TOKEN" \
-        -H "Content-Type: application/json" \
-        -d "{\"path\":\"$file\",\"content\":\"$content\"}"
-    
-    echo -e "${GREEN}✅ Created in cloud!${NC}"
+    # Create temp file with content
+    echo "$content" > "$WORKSPACE/$file"
+    upload_file "$WORKSPACE/$file"
+    rm -f "$WORKSPACE/$file"
+}
+
+# End session - sync and cleanup
+end_session() {
+    echo -e "${YELLOW}Ending session...${NC}"
+    sync
+    rm -rf "$WORKSPACE"
+    echo -e "${GREEN}Session ended! Phone storage freed!${NC}"
 }
 
 # List cloud files
 list() {
-    echo -e "${BLUE}📂 Cloud Files:${NC}"
+    echo -e "${BLUE}Cloud Files:${NC}"
     TOKEN=$(get_token)
-    curl -s "$SERVER/api/storages/$STORAGE_ID/files" \
-        -H "Authorization: Bearer $TOKEN" \
-        | python3 -c "
+    curl -s "$SERVER/api/storages/$STORAGE_ID/files/tree/" \
+        -H "Authorization: Bearer $TOKEN" | python3 -c "
 import sys, json
-data = json.load(sys.stdin)
-files = data if isinstance(data, list) else data.get('files', [])
-for f in files:
-    name = f.get('path', f.get('name', 'unknown'))
-    size = f.get('size', '?')
-    print(f'  📄 {name}  ({size} B)')
+try:
+    data = json.load(sys.stdin)
+    if not data: print('  (empty)')
+    for f in data:
+        sz = f.get('size',0)
+        if sz < 1024: s = f'{sz} B'
+        elif sz < 1048576: s = f'{sz/1024:.1f} KB'
+        else: s = f'{sz/1048576:.1f} MB'
+        print(f'  {f[\"name\"]}  ({s})')
+except: print('  (empty)')
 " 2>/dev/null
 }
 
 # Show current workspace status
 status() {
-    echo -e "${BLUE}📊 Workspace Status:${NC}"
+    echo -e "${BLUE}Workspace Status:${NC}"
     if [ -d "$WORKSPACE" ]; then
         echo -e "${GREEN}Workspace: $WORKSPACE${NC}"
         echo -e "${YELLOW}Files locally:${NC}"
@@ -174,9 +172,7 @@ case "$1" in
     list)     list ;;
     status)   status ;;
     *)
-        echo -e "${BLUE}╔═══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║   Pentaract Live Sync - Zero Storage  ║${NC}"
-        echo -e "${BLUE}╚═══════════════════════════════════════╝${NC}"
+        echo -e "${BLUE}Pentaract Live Sync - Zero Storage${NC}"
         echo ""
         echo -e "${GREEN}Commands:${NC}"
         echo "  start          - Start session (load all files from cloud)"
@@ -189,9 +185,9 @@ case "$1" in
         echo "  end            - End session (sync + cleanup)"
         echo ""
         echo -e "${YELLOW}Usage:${NC}"
-        echo "  1. pentaract-live start    # Session start"
-        echo "  2. nano /tmp/pentaract_workspace/file.txt  # Edit"
-        echo "  3. pentaract-live save file.txt  # Save to cloud"
-        echo "  4. pentaract-live end      # Cleanup phone storage"
+        echo "  1. bash ~/pentaract-live.sh start"
+        echo "  2. nano /tmp/pentaract_workspace/file.txt"
+        echo "  3. bash ~/pentaract-live.sh save file.txt"
+        echo "  4. bash ~/pentaract-live.sh end"
         ;;
 esac
