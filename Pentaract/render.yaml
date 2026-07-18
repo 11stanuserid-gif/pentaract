@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: pentaract
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: DATABASE_USER
+        value: avnadmin
+      - key: DATABASE_PASSWORD
+        sync: false
+      - key: DATABASE_HOST
+        value: pg-752045-stanuserid-9476.a.aivencloud.com
+      - key: DATABASE_PORT
+        value: 26183
+      - key: DATABASE_NAME
+        value: pentaract
+      - key: PORT
+        value: 7860
+      - key: WORKERS
+        value: 2
+      - key: CHANNEL_CAPACITY
+        value: 100
+      - key: SUPERUSER_EMAIL
+        value: admin@pentaract.com
+      - key: SUPERUSER_PASS
+        value: ChangeThisPassword123!
+      - key: ACCESS_TOKEN_EXPIRE_IN_SECS
+        value: 3600
+      - key: REFRESH_TOKEN_EXPIRE_IN_DAYS
+        value: 7
+      - key: SECRET_KEY
+        value: your-secret-key-change-this
+      - key: TELEGRAM_API_BASE_URL
+        value: https://api.telegram.org
+      - key: TELEGRAM_RATE_LIMIT
+        value: 18

@@ -1,0 +1,15 @@
+# Hugging Face Spaces Dockerfile for Pentaract
+FROM thedominux/pentaract:latest
+
+# Spaces expects the app on port 7860
+ENV PORT=7860
+
+# These will be overridden by Spaces Secrets
+# Set these in Space Settings -> Repository Secrets:
+# SUPERUSER_EMAIL, SUPERUSER_PASS, SECRET_KEY
+# DATABASE_USER, DATABASE_PASSWORD, DATABASE_NAME
+# DATABASE_HOST, DATABASE_PORT
+
+EXPOSE 7860
+
+ENTRYPOINT ["/pentaract"]
