@@ -270,10 +270,10 @@
             }
             count.textContent = `${list.length} rows`;
             tbody.innerHTML = list.map(s => `<tr>
-                <td><span class="tag tag-table">${s.table}</span></td>
-                <td>${s.inserts}</td>
-                <td>${s.updates}</td>
-                <td>${s.deletes}</td>
+                <td><span class="tag tag-table">${s.table || s[0] || '--'}</span></td>
+                <td>${s.inserts || s[1] || 0}</td>
+                <td>${s.updates || s[2] || 0}</td>
+                <td>${s.deletes || s[3] || 0}</td>
             </tr>`).join('');
             document.getElementById('statsTime').textContent = new Date().toLocaleTimeString();
         }
