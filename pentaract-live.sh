@@ -69,9 +69,9 @@ upload_file() {
         -X POST "$SERVER/api/storages/$STORAGE_ID/files/upload" \
         -H "Authorization: Bearer $TOKEN" \
         -F "file=@$file" \
-        -F "path=/")
-    
-    [ "$code" = "201" ] && echo -e "${GREEN}Uploaded: $name${NC}" || echo -e "${RED}Failed (HTTP $code)${NC}"
+        -F "path=")
+
+    [ "$code" = "201" ] && echo -e "${GREEN}Uploaded: $name${NC}" || { echo -e "${RED}Failed (HTTP $code)${NC}"; return 1; }
 }
 
 # Sync - upload all local files to cloud
