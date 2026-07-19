@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Pentaract Real-Time Live Viewer
-PostgreSQL-like instant data display
+PostgreSQL-like instant data display — DIRECT PostgreSQL connection
 """
 
 import os
@@ -9,8 +9,10 @@ import json
 import time
 import asyncio
 import threading
+import subprocess
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from urllib.request import Request, urlopen
+from datetime import datetime
 
 try:
     import websockets
@@ -19,7 +21,14 @@ try:
 except ImportError:
     WEBSOCKETS_AVAILABLE = False
 
-# Config
+# PostgreSQL Config
+PG_HOST = "pg-752045-stanuserid-9476.a.aivencloud.com"
+PG_PORT = "26183"
+PG_USER = "avnadmin"
+PG_PASS = "AVNS_RLdM3I4ET4_4ozfXTcN"
+PG_DB = "defaultdb"
+
+# Pentaract API (for file download/upload)
 Pentaract_API = "https://pentaract-i2os.onrender.com"
 ADMIN_EMAIL = "admin@pentaract.io"
 ADMIN_PASS = "Px9kL2mN7vQ4wR8tY5uI1oP3sA6dF0gH"
@@ -28,7 +37,41 @@ ADMIN_PASS = "Px9kL2mN7vQ4wR8tY5uI1oP3sA6dF0gH"
 current_token = None
 token_expiry = 0
 connected_clients = set()
-last_files_hash = None
+last_data_hash = None
+
+def psql_query(query):
+    """Execute PostgreSQL query via psql CLI"""
+    env = os.environ.copy()
+    env['PGPASSWORD'] = PG_PASS
+    try:
+        result = subprocess.run(
+            ['psql', '-h', PG_HOST, '-p', PG_PORT, '-U', PG_USER, '-d', PG_DB,
+             '-t', '-A', '-F', '|', '-c', query],
+            capture_output=True, text=True, env=env, timeout=10
+        )
+        return result.stdout.strip()
+    except Exception as e:
+        return f"ERROR: {e}"
+
+def psql_query_json(query):
+    """Execute query and return as list of dicts"""
+    env = os.environ.copy()
+    env['PGPASSWORD'] = PG_PASS
+    try:
+        result = subprocess.run(
+            ['psql', '-h', PG_HOST, '-p', PG_PORT, '-U', PG_USER, '-d', PG_DB,
+             '-t', '-A', '-F', '|', '-c', query],
+            capture_output=True, text=True, env=env, timeout=10
+        )
+        lines = result.stdout.strip().split('\n')
+        rows = []
+        for line in lines:
+            if line.strip():
+                fields = line.split('|')
+                rows.append(fields)
+        return rows
+    except Exception as e:
+        return []
 
 def get_token():
     global current_token, token_expiry
@@ -41,91 +84,151 @@ def get_token():
         with urlopen(req, timeout=5) as resp:
             result = json.loads(resp.read())
             current_token = result.get('access_token', '')
-            token_expiry = time.time() + 1800  # 30 min
+            token_expiry = time.time() + 1800
             return current_token
     except:
         return ''
 
-def fetch_files():
-    global last_files_hash
-    token = get_token()
-    if not token:
-        return []
-    try:
-        # Get storages first
-        req = Request(f"{Pentaract_API}/api/storages",
-                     headers={'Authorization': f'Bearer {token}'})
-        with urlopen(req, timeout=10) as resp:
-            storages = json.loads(resp.read())
-        
-        if not storages.get('storages'):
-            return []
-        
-        storage_id = storages['storages'][0]['id']
-        
-        # Get files
-        req = Request(f"{Pentaract_API}/api/storages/{storage_id}/files",
-                     headers={'Authorization': f'Bearer {token}'})
-        with urlopen(req, timeout=10) as resp:
-            files_data = json.loads(resp.read())
-        
-        files = files_data.get('files', [])
-        files_hash = str(sorted([f.get('name', '') for f in files]))
-        
-        # Detect changes
-        changed = files_hash != last_files_hash
-        last_files_hash = files_hash
-        
-        return {'files': files, 'changed': changed, 'storage_id': storage_id}
-    except Exception as e:
-        return {'files': [], 'changed': False, 'error': str(e)}
+def fetch_all_data():
+    """Fetch all data from PostgreSQL — real-time"""
+    global last_data_hash
+    
+    tables = {}
+    
+    # 1. Get storages
+    storages_raw = psql_query_json(
+        "SELECT id, name, chat_id, files_amount FROM storages;"
+    )
+    storages = []
+    for row in storages_raw:
+        if len(row) >= 4:
+            storages.append({
+                'id': row[0], 'name': row[1],
+                'chat_id': row[2], 'files_amount': row[3]
+            })
+    tables['storages'] = storages
+    
+    # 2. Get all files
+    files_raw = psql_query_json(
+        "SELECT id, path, size, storage_id, is_uploaded FROM files ORDER BY path;"
+    )
+    files = []
+    for row in files_raw:
+        if len(row) >= 5:
+            files.append({
+                'id': row[0], 'path': row[1],
+                'size': int(row[2]) if row[2].isdigit() else 0,
+                'storage_id': row[3],
+                'is_uploaded': row[4] == 't'
+            })
+    tables['files'] = files
+    
+    # 3. Get users
+    users_raw = psql_query_json("SELECT id, email FROM users;")
+    users = []
+    for row in users_raw:
+        if len(row) >= 2:
+            users.append({'id': row[0], 'email': row[1]})
+    tables['users'] = users
+    
+    # 4. Get file_chunks count per file
+    chunks_raw = psql_query_json(
+        "SELECT file_id, COUNT(*) as chunk_count, SUM(length(data)) as total_bytes FROM file_chunks GROUP BY file_id;"
+    )
+    chunks = {}
+    for row in chunks_raw:
+        if len(row) >= 3:
+            chunks[row[0]] = {
+                'chunk_count': int(row[1]) if row[1].isdigit() else 0,
+                'total_bytes': int(row[2]) if row[2].isdigit() else 0
+            }
+    tables['chunks'] = chunks
+    
+    # 5. Get table stats
+    stats_raw = psql_query_json(
+        """SELECT schemaname, tablename, n_tup_ins as inserts, n_tup_upd as updates, n_tup_del as deletes
+           FROM pg_stat_user_tables ORDER BY tablename;"""
+    )
+    stats = []
+    for row in stats_raw:
+        if len(row) >= 5:
+            stats.append({
+                'schema': row[0], 'table': row[1],
+                'inserts': row[2], 'updates': row[3], 'deletes': row[4]
+            })
+    tables['stats'] = stats
+    
+    # Build hash for change detection
+    data_hash = json.dumps(tables, sort_keys=True, default=str)
+    changed = data_hash != last_data_hash
+    last_data_hash = data_hash
+    
+    return {'tables': tables, 'changed': changed, 'timestamp': time.time()}
 
 async def notify_clients(data):
     if connected_clients:
-        msg = json.dumps(data)
+        msg = json.dumps(data, default=str)
         await asyncio.gather(*[client.send(msg) for client in connected_clients])
 
 async def poller():
-    """Background poller - checks for changes every 2 seconds"""
+    """Background poller - checks PostgreSQL every 3 seconds"""
     while True:
         try:
-            result = fetch_files()
+            result = fetch_all_data()
             if result.get('changed'):
                 await notify_clients({
                     'type': 'data_changed',
-                    'files': result['files'],
-                    'timestamp': time.time()
+                    'tables': result['tables'],
+                    'timestamp': result['timestamp']
                 })
             else:
                 await notify_clients({
                     'type': 'heartbeat',
+                    'timestamp': result['timestamp'],
+                    'rows': len(result['tables'].get('files', []))
+                })
+        except Exception as e:
+            try:
+                await notify_clients({
+                    'type': 'error',
+                    'message': str(e),
                     'timestamp': time.time()
                 })
-        except:
-            pass
-        await asyncio.sleep(2)
+            except:
+                pass
+        await asyncio.sleep(3)
 
 async def ws_handler(websocket, path=None):
     connected_clients.add(websocket)
     try:
         # Send initial data
-        result = fetch_files()
+        result = fetch_all_data()
         await websocket.send(json.dumps({
             'type': 'initial_data',
-            'files': result.get('files', []),
-            'timestamp': time.time()
+            'tables': result['tables'],
+            'timestamp': result['timestamp']
         }))
         
         # Listen for client messages
         async for message in websocket:
             msg = json.loads(message)
             if msg.get('type') == 'refresh':
-                result = fetch_files()
+                result = fetch_all_data()
                 await websocket.send(json.dumps({
                     'type': 'data_changed',
-                    'files': result.get('files', []),
-                    'timestamp': time.time()
+                    'tables': result['tables'],
+                    'timestamp': result['timestamp']
                 }))
+            elif msg.get('type') == 'query':
+                # Custom SQL query
+                sql = msg.get('sql', '')
+                if sql.strip().upper().startswith(('SELECT', 'SHOW', 'TABLE', '\\d')):
+                    rows = psql_query_json(sql)
+                    await websocket.send(json.dumps({
+                        'type': 'query_result',
+                        'rows': rows,
+                        'timestamp': time.time()
+                    }))
     finally:
         connected_clients.discard(websocket)
 
@@ -134,27 +237,42 @@ class LiveHandler(SimpleHTTPRequestHandler):
         super().__init__(*args, directory=os.path.dirname(os.path.abspath(__file__)), **kwargs)
     
     def do_GET(self):
-        if self.path.startswith('/api/'):
-            self.proxy_request('GET')
+        if self.path == '/api/health':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            # Quick health check
+            result = psql_query("SELECT COUNT(*) FROM files;")
+            self.wfile.write(json.dumps({
+                'status': 'ok',
+                'pg_connected': 'ERROR' not in result,
+                'files_count': result.strip(),
+                'timestamp': time.time()
+            }).encode())
+        elif self.path == '/api/tables':
+            self.proxy_pg_query("SELECT table_name FROM information_schema.tables WHERE table_schema='public';")
+        elif self.path == '/api/files':
+            self.proxy_pg_query("SELECT id, path, size, is_uploaded FROM files ORDER BY path;")
+        elif self.path == '/api/storages':
+            self.proxy_pg_query("SELECT id, name, chat_id, files_amount FROM storages;")
+        elif self.path == '/api/stats':
+            self.proxy_pg_query(
+                "SELECT schemaname, tablename, n_tup_ins, n_tup_upd, n_tup_del FROM pg_stat_user_tables ORDER BY tablename;"
+            )
         else:
             super().do_GET()
     
-    def proxy_request(self, method):
-        url = f"{Pentaract_API}{self.path}"
-        token = get_token()
-        headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {token}'}
-        try:
-            req = Request(url, headers=headers, method=method)
-            with urlopen(req, timeout=10) as response:
-                data = response.read()
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(data)
-        except Exception as e:
-            self.send_response(500)
-            self.end_headers()
+    def proxy_pg_query(self, sql):
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+        rows = psql_query_json(sql)
+        self.wfile.write(json.dumps({'rows': rows, 'count': len(rows)}).encode())
+    
+    def log_message(self, format, *args):
+        pass  # Suppress logs
 
 def run_http(port=8080):
     server = HTTPServer(('0.0.0.0', port), LiveHandler)
@@ -163,24 +281,38 @@ def run_http(port=8080):
 
 def run_websocket(port=8081):
     if not WEBSOCKETS_AVAILABLE:
-        print("⚠️  WebSocket not available, using polling only")
+        print("⚠️  WebSocket not available, HTTP polling only")
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_forever()
         return
     
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    
-    # Start poller
     loop.create_task(poller())
     
-    # Start websocket server
     start_server = websockets.serve(ws_handler, '0.0.0.0', port)
     print(f"⚡ WebSocket Server: ws://0.0.0.0:{port}")
     loop.run_until_complete(start_server)
     loop.run_forever()
 
 if __name__ == '__main__':
-    print("🚀 Starting Pentaract Real-Time Server...")
-    print("📊 PostgreSQL-like instant data display")
+    print("🚀 Starting Pentaract Live Viewer — PostgreSQL Direct Connection")
+    print(f"📊 Database: {PG_HOST}:{PG_PORT}/{PG_DB}")
+    print(f"👤 User: {PG_USER}")
+    print()
+    
+    # Test PostgreSQL connection
+    result = psql_query("SELECT COUNT(*) FROM files;")
+    if 'ERROR' in result:
+        print(f"❌ PostgreSQL connection FAILED: {result}")
+        print("   Check host, port, password")
+    else:
+        print(f"✅ PostgreSQL connected — {result.strip()} files found")
+    
+    # List tables
+    tables = psql_query_json("SELECT table_name FROM information_schema.tables WHERE table_schema='public';")
+    print(f"📋 Tables: {', '.join([t[0] for t in tables if t])}")
     print()
     
     # Start HTTP server in thread
