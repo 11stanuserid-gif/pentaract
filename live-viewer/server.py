@@ -131,16 +131,15 @@ def fetch_all_data():
             users.append({'id': row[0], 'email': row[1]})
     tables['users'] = users
     
-    # 4. Get file_chunks count per file
+    # 4. Get file_chunks count per file (no data column — just count chunks)
     chunks_raw = psql_query_json(
-        "SELECT file_id, COUNT(*) as chunk_count, SUM(length(data)) as total_bytes FROM file_chunks GROUP BY file_id;"
+        "SELECT file_id, COUNT(*) as chunk_count FROM file_chunks GROUP BY file_id;"
     )
     chunks = {}
     for row in chunks_raw:
-        if len(row) >= 3:
+        if len(row) >= 2:
             chunks[row[0]] = {
                 'chunk_count': int(row[1]) if row[1].isdigit() else 0,
-                'total_bytes': int(row[2]) if row[2].isdigit() else 0
             }
     tables['chunks'] = chunks
     
