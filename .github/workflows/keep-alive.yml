@@ -1,26 +1,54 @@
-name: Codespace Keep Alive
+name: Codespace Keep Alive 24/7
 
 on:
   schedule:
-    # Every 5 minutes - keeps Codespace awake
-    - cron: '*/5 * * * *'
+    # Har 3 minute mein ping - codespace ko active rakhne ke liye
+    - cron: '*/3 * * * *'
   workflow_dispatch:  # Manual trigger
 
 jobs:
-  ping:
+  keep-alive:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Codespace
+      - name: Ping Codespace URL
         run: |
-          echo "Pinging Codespace at $(date)..."
+          echo "=== Pinging Codespace at $(date) ==="
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
             --max-time 15 \
             "https://turbo-space-enigma-vpv5g6vp6pjxcwg6x.github.dev" 2>/dev/null)
-          echo "Response: HTTP $HTTP_CODE"
-          
-          # Also try the kimi-code localtunnel URL if set
-          if [ -n "$LT_URL" ]; then
-            LT_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-              --max-time 10 "$LT_URL" 2>/dev/null)
-            echo "Localtunnel response: HTTP $LT_CODE"
+          echo "Codespace URL: HTTP $HTTP_CODE"
+
+      - name: Try to Restart Codespace if Down (requires PAT with codespace scope)
+        env:
+          GH_TOKEN: ${{ secrets.GH_CODESPACE_TOKEN || github.token }}
+        run: |
+          # Check if gh can manage codespaces
+          if gh auth status -h github.com 2>&1 | grep -q "codespace"; then
+            echo "gh has codespace scope - attempting to restart..."
+            gh codespace list 2>/dev/null | head -5
+            
+            # Try to start the codespace if it's stopped
+            CS_NAME=$(gh codespace list --repo "11stanuserid-gif/pentaract" 2>/dev/null | awk '{print $1}' | head -1)
+            if [ -n "$CS_NAME" ]; then
+              CS_STATUS=$(gh codespace view "$CS_NAME" 2>/dev/null | grep -i state | awk '{print $2}')
+              echo "Codespace $CS_NAME status: $CS_STATUS"
+              if [ "$CS_STATUS" = "stopped" ] || [ "$CS_STATUS" = "shutdown" ]; then
+                echo "Codespace is stopped, starting it..."
+                gh codespace start "$CS_NAME" 2>/dev/null || true
+              fi
+            fi
+          else
+            echo "NOTE: Token doesn't have 'codespace' scope."
+            echo "To enable auto-restart, create a PAT at:"
+            echo "  https://github.com/settings/tokens/new"
+            echo "Select 'codespace' scope, then add it as repo secret 'GH_CODESPACE_TOKEN'"
           fi
+
+      - name: Ping Common Ports
+        run: |
+          for port in 10000 8080 3000; do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+              --max-time 5 \
+              "https://turbo-space-enigma-vpv5g6vp6pjxcwg6x.github.dev/proxy/$port" 2>/dev/null)
+            echo "Port $port: HTTP $CODE"
+          done
