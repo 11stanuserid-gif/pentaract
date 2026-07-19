@@ -17,19 +17,32 @@ jobs:
             "https://turbo-space-enigma-vpv5g6vp6pjxcwg6x.github.dev" 2>/dev/null)
           echo "Codespace: HTTP $HTTP_CODE"
 
-      - name: Ping Kimi Code Tunnel
+      - name: Discover Tunnel URL & Ping
+        env:
+          GH_TOKEN: ${{ secrets.GH_CODESPACE_TOKEN }}
         run: |
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
-            "https://nice-guests-cross.loca.lt" 2>/dev/null)
+          # Discover current tunnel URL from codespace
+          TUNNEL_URL=$(GH_TOKEN=${{ secrets.GH_CODESPACE_TOKEN }} \
+            gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- \
+            "cat /tmp/lt.log 2>/dev/null | grep -oE 'https://[a-z0-9-]+\.loca\.lt' | tail -1" 2>/dev/null)
+          echo "Tunnel URL: $TUNNEL_URL"
+
+          if [ -z "$TUNNEL_URL" ]; then
+            echo "No tunnel URL found! Restarting codespace..."
+            GH_TOKEN=${{ secrets.GH_CODESPACE_TOKEN }} \
+              gh codespace restart turbo-space-enigma-vpv5g6vp6pjxcwg6x
+            exit 0
+          fi
+
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$TUNNEL_URL" 2>/dev/null)
           echo "Kimi Tunnel: HTTP $HTTP_CODE"
 
           if [ "$HTTP_CODE" = "503" ] || [ "$HTTP_CODE" = "000" ]; then
-            echo "Tunnel down! Trying to restart codespace..."
-            curl -s -X POST \
-              -H "Authorization: token ${{ secrets.GH_CODESPACE_TOKEN }}" \
-              -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/user/codespaces/turbo-space-enigma-vpv5g6vp6pjxcwg6x/start"
-            echo "Codespace restart triggered"
+            echo "Tunnel down! Restarting localtunnel..."
+            GH_TOKEN=${{ secrets.GH_CODESPACE_TOKEN }} \
+              gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- \
+              "pkill -f 'lt --port' 2>/dev/null; sleep 2; nohup lt --port 10000 > /tmp/lt.log 2>&1 &"
+            echo "Tunnel restarted"
           fi
 
       - name: Restart Codespace if Stopped
