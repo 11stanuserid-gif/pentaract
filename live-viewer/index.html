@@ -219,7 +219,7 @@
                     <td>${f.is_uploaded ? '<span class="tag tag-yes">UPLOADED</span>' : '<span class="tag tag-no">PENDING</span>'}</td>
                     <td class="file-link">📄 ${f.path}</td>
                     <td>${fmtSize(f.size)}</td>
-                    <td>${ch.chunk_count || 0} (${fmtSize(ch.total_bytes || 0)})</td>
+                    <td>${ch.chunk_count || 0} chunks</td>
                     <td><span class="uuid">${shortId(f.storage_id)}</span></td>
                 </tr>`;
             }).join('');
