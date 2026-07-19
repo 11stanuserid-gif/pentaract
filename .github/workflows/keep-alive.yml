@@ -1,0 +1,26 @@
+name: Codespace Keep Alive
+
+on:
+  schedule:
+    # Every 5 minutes - keeps Codespace awake
+    - cron: '*/5 * * * *'
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Codespace
+        run: |
+          echo "Pinging Codespace at $(date)..."
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 15 \
+            "https://turbo-space-enigma-vpv5g6vp6pjxcwg6x.github.dev" 2>/dev/null)
+          echo "Response: HTTP $HTTP_CODE"
+          
+          # Also try the kimi-code localtunnel URL if set
+          if [ -n "$LT_URL" ]; then
+            LT_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+              --max-time 10 "$LT_URL" 2>/dev/null)
+            echo "Localtunnel response: HTTP $LT_CODE"
+          fi

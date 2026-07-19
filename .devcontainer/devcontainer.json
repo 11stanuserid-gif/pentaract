@@ -1,0 +1,17 @@
+{
+    "name": "Pentaract + Kimi Code",
+    "image": "mcr.microsoft.com/devcontainers/universal:2",
+    "postCreateCommand": "bash .devcontainer/setup-kimi.sh",
+    "forwardPorts": [10000],
+    "portsAttributes": {
+        "10000": {
+            "label": "Kimi Code Server",
+            "onAutoForward": "notify"
+        }
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": []
+        }
+    }
+}
