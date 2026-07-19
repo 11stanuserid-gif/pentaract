@@ -95,9 +95,9 @@ def fetch_all_data():
     
     tables = {}
     
-    # 1. Get storages
+    # 1. Get storages (no files_amount column — computed from files table)
     storages_raw = psql_query_json(
-        "SELECT id, name, chat_id, files_amount FROM storages;"
+        "SELECT s.id, s.name, s.chat_id, COUNT(f.id) as file_count FROM storages s LEFT JOIN files f ON f.storage_id = s.id GROUP BY s.id, s.name, s.chat_id;"
     )
     storages = []
     for row in storages_raw:
@@ -144,17 +144,16 @@ def fetch_all_data():
             }
     tables['chunks'] = chunks
     
-    # 5. Get table stats
+    # 5. Get table stats (column is relname not tablename on Aiven)
     stats_raw = psql_query_json(
-        """SELECT schemaname, tablename, n_tup_ins as inserts, n_tup_upd as updates, n_tup_del as deletes
-           FROM pg_stat_user_tables ORDER BY tablename;"""
+        "SELECT relname, n_tup_ins, n_tup_upd, n_tup_del FROM pg_stat_user_tables ORDER BY relname;"
     )
     stats = []
     for row in stats_raw:
-        if len(row) >= 5:
+        if len(row) >= 4:
             stats.append({
-                'schema': row[0], 'table': row[1],
-                'inserts': row[2], 'updates': row[3], 'deletes': row[4]
+                'table': row[0],
+                'inserts': row[1], 'updates': row[2], 'deletes': row[3]
             })
     tables['stats'] = stats
     
@@ -255,10 +254,10 @@ class LiveHandler(SimpleHTTPRequestHandler):
         elif self.path == '/api/files':
             self.proxy_pg_query("SELECT id, path, size, is_uploaded FROM files ORDER BY path;")
         elif self.path == '/api/storages':
-            self.proxy_pg_query("SELECT id, name, chat_id, files_amount FROM storages;")
+            self.proxy_pg_query("SELECT s.id, s.name, s.chat_id, COUNT(f.id) as file_count FROM storages s LEFT JOIN files f ON f.storage_id = s.id GROUP BY s.id, s.name, s.chat_id;")
         elif self.path == '/api/stats':
             self.proxy_pg_query(
-                "SELECT schemaname, tablename, n_tup_ins, n_tup_upd, n_tup_del FROM pg_stat_user_tables ORDER BY tablename;"
+                "SELECT relname, n_tup_ins, n_tup_upd, n_tup_del FROM pg_stat_user_tables ORDER BY relname;"
             )
         else:
             super().do_GET()
