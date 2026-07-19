@@ -1,0 +1,29 @@
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    ripgrep \
+    ffmpeg \
+    nodejs \
+    npm \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv (Python package manager)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    export PATH="$HOME/.local/bin:$PATH"
+
+# Set working directory
+WORKDIR /app
+
+# Install Hermes Agent
+RUN curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+
+# Copy entrypoint
+COPY docker-entrypoint-hermes.sh /docker-entrypoint-hermes.sh
+RUN chmod +x /docker-entrypoint-hermes.sh
+
+EXPOSE 3000
+
+ENTRYPOINT ["/bin/bash", "/docker-entrypoint-hermes.sh"]

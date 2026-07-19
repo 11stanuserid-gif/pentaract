@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: hermes-agent
+    runtime: docker
+    dockerfilePath: ./Dockerfile.hermes
+    dockerContext: .
+    region: singapore
+    plan: free
+    envVars:
+      - key: HERMES_API_KEY
+        sync: false
+      - key: HERMES_PROVIDER
+        value: "openrouter"
+      - key: HERMES_MODEL
+        value: "openai/gpt-4o-mini"
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
