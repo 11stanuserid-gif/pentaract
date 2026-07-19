@@ -1,8 +1,8 @@
-name: Codespace Keep Alive 24/7
+name: Codespace + Kimi Keep Alive 24/7
 
 on:
   schedule:
-    # Har 3 minute mein ping - codespace ko active rakhne ke liye
+    # Har 3 minute mein
     - cron: '*/3 * * * *'
   workflow_dispatch:  # Manual trigger
 
@@ -12,43 +12,42 @@ jobs:
     steps:
       - name: Ping Codespace URL
         run: |
-          echo "=== Pinging Codespace at $(date) ==="
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            --max-time 15 \
+          echo "=== $(date) ==="
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
             "https://turbo-space-enigma-vpv5g6vp6pjxcwg6x.github.dev" 2>/dev/null)
-          echo "Codespace URL: HTTP $HTTP_CODE"
+          echo "Codespace: HTTP $HTTP_CODE"
 
-      - name: Try to Restart Codespace if Down (requires PAT with codespace scope)
-        env:
-          GH_TOKEN: ${{ secrets.GH_CODESPACE_TOKEN || github.token }}
+      - name: Ping Kimi Code Tunnel
         run: |
-          # Check if gh can manage codespaces
-          if gh auth status -h github.com 2>&1 | grep -q "codespace"; then
-            echo "gh has codespace scope - attempting to restart..."
-            gh codespace list 2>/dev/null | head -5
-            
-            # Try to start the codespace if it's stopped
-            CS_NAME=$(gh codespace list --repo "11stanuserid-gif/pentaract" 2>/dev/null | awk '{print $1}' | head -1)
-            if [ -n "$CS_NAME" ]; then
-              CS_STATUS=$(gh codespace view "$CS_NAME" 2>/dev/null | grep -i state | awk '{print $2}')
-              echo "Codespace $CS_NAME status: $CS_STATUS"
-              if [ "$CS_STATUS" = "stopped" ] || [ "$CS_STATUS" = "shutdown" ]; then
-                echo "Codespace is stopped, starting it..."
-                gh codespace start "$CS_NAME" 2>/dev/null || true
-              fi
-            fi
-          else
-            echo "NOTE: Token doesn't have 'codespace' scope."
-            echo "To enable auto-restart, create a PAT at:"
-            echo "  https://github.com/settings/tokens/new"
-            echo "Select 'codespace' scope, then add it as repo secret 'GH_CODESPACE_TOKEN'"
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
+            "https://nice-guests-cross.loca.lt" 2>/dev/null)
+          echo "Kimi Tunnel: HTTP $HTTP_CODE"
+
+          if [ "$HTTP_CODE" = "503" ] || [ "$HTTP_CODE" = "000" ]; then
+            echo "Tunnel down! Trying to restart codespace..."
+            curl -s -X POST \
+              -H "Authorization: token ${{ secrets.GH_CODESPACE_TOKEN }}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/user/codespaces/turbo-space-enigma-vpv5g6vp6pjxcwg6x/start"
+            echo "Codespace restart triggered"
           fi
 
-      - name: Ping Common Ports
+      - name: Restart Codespace if Stopped
+        env:
+          GH_TOKEN: ${{ secrets.GH_CODESPACE_TOKEN }}
         run: |
-          for port in 10000 8080 3000; do
-            CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-              --max-time 5 \
-              "https://turbo-space-enigma-vpv5g6vp6pjxcwg6x.github.dev/proxy/$port" 2>/dev/null)
-            echo "Port $port: HTTP $CODE"
-          done
+          STATE=$(curl -s \
+            -H "Authorization: token ${{ secrets.GH_CODESPACE_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/user/codespaces/turbo-space-enigma-vpv5g6vp6pjxcwg6x" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('state','unknown'))")
+          echo "Codespace state: $STATE"
+
+          if [ "$STATE" = "Shutdown" ] || [ "$STATE" = "ShuttingDown" ]; then
+            echo "Starting codespace..."
+            curl -s -X POST \
+              -H "Authorization: token ${{ secrets.GH_CODESPACE_TOKEN }}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/user/codespaces/turbo-space-enigma-vpv5g6vp6pjxcwg6x/start"
+            echo "Started!"
+          fi
