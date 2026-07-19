@@ -3,251 +3,346 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pentaract Live - PostgreSQL Style</title>
+    <title>Pentaract PostgreSQL Live</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Courier New', monospace; background: #0d1117; color: #c9d1d9; min-height: 100vh; }
+        body { font-family: 'Courier New', monospace; background: #0d1117; color: #c9d1d9; min-height: 100vh; padding-bottom: 50px; }
         
         .header { background: #161b22; padding: 12px 20px; border-bottom: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center; }
-        .header h1 { font-size: 16px; color: #58a6ff; }
+        .header h1 { font-size: 15px; color: #58a6ff; }
         .status-badge { padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: bold; }
         .status-live { background: #238636; color: #fff; animation: pulse 2s infinite; }
         .status-offline { background: #da3633; color: #fff; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
         
-        .container { padding: 20px; max-width: 1200px; margin: 0 auto; }
+        .container { padding: 15px; max-width: 1200px; margin: 0 auto; }
         
-        .query-section { background: #161b22; border: 1px solid #30363d; border-radius: 6px; margin-bottom: 20px; }
-        .query-header { padding: 10px 15px; background: #21262d; border-bottom: 1px solid #30363d; font-size: 12px; color: #8b949e; }
-        .query-input { width: 100%; background: transparent; border: none; color: #c9d1d9; font-family: inherit; font-size: 14px; padding: 15px; outline: none; }
+        /* Tabs */
+        .tabs { display: flex; gap: 2px; margin-bottom: 0; }
+        .tab { padding: 8px 16px; background: #161b22; border: 1px solid #30363d; border-bottom: none; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 12px; color: #8b949e; font-family: inherit; }
+        .tab.active { background: #0d1117; color: #58a6ff; border-color: #30363d; }
+        .tab:hover { color: #c9d1d9; }
         
-        .results-section { background: #161b22; border: 1px solid #30363d; border-radius: 6px; overflow: hidden; }
-        .results-header { padding: 10px 15px; background: #21262d; border-bottom: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center; }
-        .results-header .count { color: #58a6ff; font-size: 13px; }
-        .results-header .refresh-info { color: #8b949e; font-size: 11px; }
+        /* Query Console */
+        .query-section { background: #161b22; border: 1px solid #30363d; border-radius: 6px; margin-bottom: 15px; }
+        .query-header { padding: 8px 12px; background: #21262d; border-bottom: 1px solid #30363d; font-size: 11px; color: #8b949e; display: flex; justify-content: space-between; }
+        .query-input { width: 100%; background: transparent; border: none; color: #3fb950; font-family: inherit; font-size: 13px; padding: 12px; outline: none; }
+        .query-input::placeholder { color: #6e7681; }
         
-        .file-table { width: 100%; border-collapse: collapse; }
-        .file-table th { background: #21262d; padding: 10px 15px; text-align: left; font-size: 12px; color: #8b949e; border-bottom: 1px solid #30363d; }
-        .file-table td { padding: 10px 15px; border-bottom: 1px solid #21262d; font-size: 13px; }
-        .file-table tr:hover { background: #21262d; }
-        .file-table tr.new-row { animation: highlight 2s ease-out; }
+        /* Table Panel */
+        .panel { background: #0d1117; border: 1px solid #30363d; border-radius: 0 0 6px 6px; overflow: hidden; margin-bottom: 15px; display: none; }
+        .panel.active { display: block; }
+        .panel-header { padding: 8px 12px; background: #161b22; border-bottom: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center; }
+        .panel-header .count { color: #58a6ff; font-size: 12px; }
+        .panel-header .time { color: #6e7681; font-size: 11px; }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #161b22; padding: 8px 12px; text-align: left; font-size: 11px; color: #8b949e; border-bottom: 1px solid #30363d; white-space: nowrap; }
+        td { padding: 8px 12px; border-bottom: 1px solid #21262d; font-size: 12px; white-space: nowrap; }
+        tr:hover { background: #161b22; }
+        tr.new-row { animation: highlight 2s ease-out; }
         @keyframes highlight { from { background: #238636; } to { background: transparent; } }
         
-        .file-icon { margin-right: 8px; }
-        .file-name { color: #58a6ff; cursor: pointer; }
-        .file-name:hover { text-decoration: underline; }
-        .file-size { color: #8b949e; }
-        .file-date { color: #6e7681; font-size: 12px; }
+        .tag { padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: bold; }
+        .tag-yes { background: #238636; color: #fff; }
+        .tag-no { background: #da3633; color: #fff; }
+        .tag-table { background: #1f6feb; color: #fff; }
+        .file-link { color: #58a6ff; cursor: pointer; }
+        .file-link:hover { text-decoration: underline; }
         
-        .status-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #161b22; border-top: 1px solid #30363d; padding: 8px 20px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
+        /* Activity Log */
+        .log-section { background: #161b22; border: 1px solid #30363d; border-radius: 6px; }
+        .log-header { padding: 8px 12px; background: #21262d; border-bottom: 1px solid #30363d; font-size: 11px; color: #8b949e; }
+        .log-content { padding: 8px; max-height: 120px; overflow-y: auto; font-size: 11px; }
+        .log-entry { margin-bottom: 2px; }
+        .log-entry.ok { color: #3fb950; }
+        .log-entry.err { color: #f85149; }
+        .log-entry.info { color: #8b949e; }
+        
+        .status-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #161b22; border-top: 1px solid #30363d; padding: 6px 20px; display: flex; justify-content: space-between; font-size: 10px; z-index: 10; }
         .status-bar .left { color: #8b949e; }
         .status-bar .right { color: #58a6ff; }
         
-        .log-section { margin-top: 20px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; }
-        .log-header { padding: 10px 15px; background: #21262d; border-bottom: 1px solid #30363d; font-size: 12px; color: #8b949e; }
-        .log-content { padding: 10px; max-height: 150px; overflow-y: auto; font-size: 11px; }
-        .log-entry { margin-bottom: 3px; }
-        .log-entry.success { color: #3fb950; }
-        .log-entry.error { color: #f85149; }
-        .log-entry.info { color: #8b949e; }
-        
-        .empty-state { text-align: center; padding: 40px; color: #6e7681; }
+        .empty { text-align: center; padding: 30px; color: #6e7681; }
+        .uuid { color: #6e7681; font-size: 10px; }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>⚡ PENTARACT LIVE — PostgreSQL Style</h1>
+        <h1>⚡ PENTARACT — PostgreSQL Live</h1>
         <span class="status-badge status-offline" id="statusBadge">CONNECTING</span>
     </div>
     
     <div class="container">
         <div class="query-section">
-            <div class="query-header">▶ SQL QUERY CONSOLE</div>
+            <div class="query-header">
+                <span>▶ SQL CONSOLE</span>
+                <span id="pgInfo">Loading...</span>
+            </div>
             <input type="text" class="query-input" id="queryInput" 
-                   placeholder="SELECT * FROM pentaract.files ORDER BY created_at DESC;" readonly>
+                   placeholder="SELECT * FROM files ORDER BY path;" readonly>
         </div>
         
-        <div class="results-section">
-            <div class="results-header">
-                <span class="count" id="fileCount">0 rows</span>
-                <span class="refresh-info" id="refreshInfo">Real-time via WebSocket</span>
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('files')">📁 FILES</button>
+            <button class="tab" onclick="showTab('storages')">💾 STORAGES</button>
+            <button class="tab" onclick="showTab('users')">👤 USERS</button>
+            <button class="tab" onclick="showTab('stats')">📊 STATS</button>
+        </div>
+        
+        <!-- Files Panel -->
+        <div class="panel active" id="panel-files">
+            <div class="panel-header">
+                <span class="count" id="filesCount">0 rows</span>
+                <span class="time" id="filesTime">--</span>
             </div>
-            <table class="file-table">
+            <table>
                 <thead>
-                    <tr>
-                        <th>STATUS</th>
-                        <th>NAME</th>
-                        <th>SIZE</th>
-                        <th>TYPE</th>
-                        <th>LAST MODIFIED</th>
-                    </tr>
+                    <tr><th>STATUS</th><th>PATH</th><th>SIZE</th><th>CHUNKS</th><th>STORAGE</th></tr>
                 </thead>
-                <tbody id="fileTableBody">
-                    <tr><td colspan="5" class="empty-state">Connecting to database...</td></tr>
-                </tbody>
+                <tbody id="filesBody"><tr><td colspan="5" class="empty">Connecting to PostgreSQL...</td></tr></tbody>
+            </table>
+        </div>
+        
+        <!-- Storages Panel -->
+        <div class="panel" id="panel-storages">
+            <div class="panel-header">
+                <span class="count" id="storagesCount">0 rows</span>
+                <span class="time" id="storagesTime">--</span>
+            </div>
+            <table>
+                <thead>
+                    <tr><th>ID</th><th>NAME</th><th>CHAT ID</th><th>FILES</th></tr>
+                </thead>
+                <tbody id="storagesBody"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
+            </table>
+        </div>
+        
+        <!-- Users Panel -->
+        <div class="panel" id="panel-users">
+            <div class="panel-header">
+                <span class="count" id="usersCount">0 rows</span>
+                <span class="time" id="usersTime">--</span>
+            </div>
+            <table>
+                <thead>
+                    <tr><th>ID</th><th>EMAIL</th></tr>
+                </thead>
+                <tbody id="usersBody"><tr><td colspan="2" class="empty">Loading...</td></tr></tbody>
+            </table>
+        </div>
+        
+        <!-- Stats Panel -->
+        <div class="panel" id="panel-stats">
+            <div class="panel-header">
+                <span class="count" id="statsCount">0 rows</span>
+                <span class="time" id="statsTime">--</span>
+            </div>
+            <table>
+                <thead>
+                    <tr><th>TABLE</th><th>INSERTS</th><th>UPDATES</th><th>DELETES</th></tr>
+                </thead>
+                <tbody id="statsBody"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
             </table>
         </div>
         
         <div class="log-section">
-            <div class="query-header">▶ ACTIVITY LOG</div>
+            <div class="log-header">▶ ACTIVITY LOG</div>
             <div class="log-content" id="logContent"></div>
         </div>
     </div>
     
     <div class="status-bar">
         <div class="left">
-            <span id="connectionType">WebSocket</span> | 
-            Latency: <span id="latency">--</span>ms |
-            Last update: <span id="lastUpdate">--</span>
+            <span id="connType">WebSocket</span> | 
+            <span id="latency">--</span>ms |
+            Updated: <span id="lastUpdate">--</span>
         </div>
-        <div class="right">Pentaract PostgreSQL Gateway v1.0</div>
+        <div class="right">PostgreSQL: pg-752045-stanuserid-9476.a.aivencloud.com:26183</div>
     </div>
 
     <script>
         let ws = null;
         let lastPing = 0;
+        let activeTab = 'files';
         let fileCache = [];
         
-        function log(msg, type = 'info') {
+        function log(msg, type='info') {
             const el = document.getElementById('logContent');
-            const entry = document.createElement('div');
-            entry.className = `log-entry ${type}`;
-            entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-            el.appendChild(entry);
+            const d = document.createElement('div');
+            d.className = `log-entry ${type}`;
+            d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            el.appendChild(d);
             el.scrollTop = el.scrollHeight;
+            if (el.children.length > 50) el.removeChild(el.firstChild);
         }
         
-        function setStatus(online) {
-            const badge = document.getElementById('statusBadge');
-            if (online) {
-                badge.textContent = '● LIVE';
-                badge.className = 'status-badge status-live';
-            } else {
-                badge.textContent = '● OFFLINE';
-                badge.className = 'status-badge status-offline';
-            }
+        function setStatus(on) {
+            const b = document.getElementById('statusBadge');
+            b.textContent = on ? '● LIVE' : '● OFFLINE';
+            b.className = `status-badge ${on ? 'status-live' : 'status-offline'}`;
         }
         
-        function formatSize(bytes) {
-            if (!bytes) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        function showTab(name) {
+            activeTab = name;
+            document.querySelectorAll('.tab').forEach((t,i) => {
+                t.classList.toggle('active', ['files','storages','users','stats'][i] === name);
+            });
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            document.getElementById(`panel-${name}`).classList.add('active');
         }
         
-        function getFileType(name) {
-            if (!name) return 'unknown';
-            const ext = name.split('.').pop().toLowerCase();
-            const types = { 'txt': 'text', 'json': 'data', 'py': 'python', 'js': 'javascript', 'sh': 'script', 'jpg': 'image', 'png': 'image' };
-            return types[ext] || ext;
+        function fmtSize(b) {
+            if (!b) return '0 B';
+            const k = 1024, s = ['B','KB','MB','GB'];
+            const i = Math.floor(Math.log(b)/Math.log(k));
+            return (b/Math.pow(k,i)).toFixed(1) + ' ' + s[i];
         }
         
-        function renderFiles(files) {
-            const tbody = document.getElementById('fileTableBody');
-            const countEl = document.getElementById('fileCount');
-            
-            if (!files || files.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No files in database</td></tr>';
-                countEl.textContent = '0 rows';
+        function shortId(id) { return id ? id.substring(0,8) + '...' : '--'; }
+        
+        function renderFiles(files, chunks) {
+            const tbody = document.getElementById('filesBody');
+            const count = document.getElementById('filesCount');
+            if (!files || !files.length) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty">No files</td></tr>';
+                count.textContent = '0 rows';
                 return;
             }
-            
-            // Detect new files
-            const oldNames = fileCache.map(f => f.name);
+            const oldNames = fileCache.map(f => f.path);
             fileCache = files;
-            
-            countEl.textContent = `${files.length} rows`;
-            
-            tbody.innerHTML = files.map((f, i) => {
-                const isNew = !oldNames.includes(f.name) && oldNames.length > 0;
-                return `
-                    <tr class="${isNew ? 'new-row' : ''}">
-                        <td>${isNew ? '🟢 NEW' : '✅'}</td>
-                        <td class="file-name" onclick="downloadFile('${f.id}')">📄 ${f.name || f.path || 'unnamed'}</td>
-                        <td class="file-size">${formatSize(f.size)}</td>
-                        <td>${getFileType(f.name)}</td>
-                        <td class="file-date">${f.created_at ? new Date(f.created_at).toLocaleString() : '--'}</td>
-                    </tr>
-                `;
+            count.textContent = `${files.length} rows`;
+            tbody.innerHTML = files.map(f => {
+                const isNew = !oldNames.includes(f.path) && oldNames.length > 0;
+                const ch = chunks[f.id] || {};
+                return `<tr class="${isNew?'new-row':''}">
+                    <td>${f.is_uploaded ? '<span class="tag tag-yes">UPLOADED</span>' : '<span class="tag tag-no">PENDING</span>'}</td>
+                    <td class="file-link">📄 ${f.path}</td>
+                    <td>${fmtSize(f.size)}</td>
+                    <td>${ch.chunk_count || 0} (${fmtSize(ch.total_bytes || 0)})</td>
+                    <td><span class="uuid">${shortId(f.storage_id)}</span></td>
+                </tr>`;
             }).join('');
+            document.getElementById('filesTime').textContent = new Date().toLocaleTimeString();
         }
         
-        function downloadFile(id) {
-            // Trigger download via API
-            log(`Downloading file: ${id}`);
+        function renderStorages(list) {
+            const tbody = document.getElementById('storagesBody');
+            const count = document.getElementById('storagesCount');
+            if (!list || !list.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="empty">No storages</td></tr>';
+                count.textContent = '0 rows';
+                return;
+            }
+            count.textContent = `${list.length} rows`;
+            tbody.innerHTML = list.map(s => `<tr>
+                <td><span class="uuid">${shortId(s.id)}</span></td>
+                <td><span class="tag tag-table">${s.name}</span></td>
+                <td>${s.chat_id}</td>
+                <td>${s.files_amount}</td>
+            </tr>`).join('');
+            document.getElementById('storagesTime').textContent = new Date().toLocaleTimeString();
+        }
+        
+        function renderUsers(list) {
+            const tbody = document.getElementById('usersBody');
+            const count = document.getElementById('usersCount');
+            if (!list || !list.length) {
+                tbody.innerHTML = '<tr><td colspan="2" class="empty">No users</td></tr>';
+                count.textContent = '0 rows';
+                return;
+            }
+            count.textContent = `${list.length} rows`;
+            tbody.innerHTML = list.map(u => `<tr>
+                <td><span class="uuid">${shortId(u.id)}</span></td>
+                <td>${u.email}</td>
+            </tr>`).join('');
+            document.getElementById('usersTime').textContent = new Date().toLocaleTimeString();
+        }
+        
+        function renderStats(list) {
+            const tbody = document.getElementById('statsBody');
+            const count = document.getElementById('statsCount');
+            if (!list || !list.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="empty">No stats</td></tr>';
+                count.textContent = '0 rows';
+                return;
+            }
+            count.textContent = `${list.length} rows`;
+            tbody.innerHTML = list.map(s => `<tr>
+                <td><span class="tag tag-table">${s.table}</span></td>
+                <td>${s.inserts}</td>
+                <td>${s.updates}</td>
+                <td>${s.deletes}</td>
+            </tr>`).join('');
+            document.getElementById('statsTime').textContent = new Date().toLocaleTimeString();
         }
         
         function connectWebSocket() {
             const wsUrl = `ws://${window.location.hostname}:8081`;
-            log(`Connecting to WebSocket: ${wsUrl}`);
+            log(`Connecting: ${wsUrl}`);
             
             try {
                 ws = new WebSocket(wsUrl);
-                
                 ws.onopen = () => {
-                    log('WebSocket connected — Real-time sync active', 'success');
+                    log('WebSocket connected — PostgreSQL live sync active', 'ok');
                     setStatus(true);
-                    document.getElementById('connectionType').textContent = 'WebSocket';
+                    document.getElementById('connType').textContent = 'WebSocket';
                 };
-                
-                ws.onmessage = (event) => {
-                    const data = JSON.parse(event.data);
-                    
-                    if (data.type === 'initial_data' || data.type === 'data_changed') {
-                        renderFiles(data.files);
+                ws.onmessage = (e) => {
+                    const d = JSON.parse(e.data);
+                    if (d.type === 'initial_data' || d.type === 'data_changed') {
+                        const t = d.tables || {};
+                        renderFiles(t.files, t.chunks);
+                        renderStorages(t.storages);
+                        renderUsers(t.users);
+                        renderStats(t.stats);
                         document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
-                        if (data.type === 'data_changed') {
-                            log('📡 Data changed — Table updated instantly', 'success');
-                        }
-                    } else if (data.type === 'heartbeat') {
-                        // Calculate latency
-                        const latency = Date.now() - lastPing;
-                        document.getElementById('latency').textContent = latency;
+                        document.getElementById('pgInfo').textContent = `${(t.files||[]).length} files | ${(t.storages||[]).length} storages | ${(t.users||[]).length} users`;
+                        if (d.type === 'data_changed') log('📡 PostgreSQL data changed — refreshed', 'ok');
+                    } else if (d.type === 'heartbeat') {
+                        document.getElementById('latency').textContent = Math.round((Date.now()/1000 - d.timestamp) * 1000);
+                    } else if (d.type === 'error') {
+                        log(`DB Error: ${d.message}`, 'err');
                     }
                 };
-                
                 ws.onclose = () => {
-                    log('WebSocket disconnected — Reconnecting...', 'error');
+                    log('Disconnected — reconnecting...', 'err');
                     setStatus(false);
                     setTimeout(connectWebSocket, 3000);
                 };
-                
-                ws.onerror = (err) => {
-                    log('WebSocket error — Falling back to polling', 'error');
+                ws.onerror = () => {
+                    log('WebSocket error — falling back to polling', 'err');
                     startPolling();
                 };
-            } catch (e) {
-                log('WebSocket failed — Using HTTP polling', 'error');
+            } catch(e) {
+                log('WebSocket failed — using HTTP polling', 'err');
                 startPolling();
             }
         }
         
         function startPolling() {
-            document.getElementById('connectionType').textContent = 'HTTP Polling';
-            log('Starting HTTP polling mode (5s interval)');
-            
+            document.getElementById('connType').textContent = 'HTTP Polling';
+            log('HTTP polling mode (5s interval)');
             setInterval(async () => {
-                lastPing = Date.now();
                 try {
-                    const res = await fetch('/api/storages');
-                    const data = await res.json();
-                    if (data.storages && data.storages[0]) {
-                        const filesRes = await fetch(`/api/storages/${data.storages[0].id}/files`);
-                        const filesData = await filesRes.json();
-                        renderFiles(filesData.files || []);
-                        document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
-                        setStatus(true);
-                    }
-                } catch (e) {
-                    setStatus(false);
-                }
+                    const [files, storages, users, stats] = await Promise.all([
+                        fetch('/api/files').then(r=>r.json()),
+                        fetch('/api/storages').then(r=>r.json()),
+                        fetch('/api/users').then(r=>r.json()),
+                        fetch('/api/stats').then(r=>r.json())
+                    ]);
+                    renderFiles(files.rows);
+                    renderStorages(storages.rows);
+                    renderUsers(users.rows);
+                    renderStats(stats.rows);
+                    setStatus(true);
+                    document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+                } catch(e) { setStatus(false); }
             }, 5000);
         }
         
-        // Initialize
-        log('Pentaract Live Viewer initialized');
-        log('Mode: Real-time PostgreSQL-style display');
+        log('Pentaract Live Viewer — PostgreSQL Direct Connection');
         connectWebSocket();
     </script>
 </body>
