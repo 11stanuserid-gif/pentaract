@@ -37,3 +37,14 @@ services:
         value: https://api.telegram.org
       - key: TELEGRAM_RATE_LIMIT
         value: "18"
+
+  - type: web
+    name: kimi-code
+    runtime: docker
+    dockerfilePath: ./Dockerfile.kimi-code
+    dockerContext: .
+    region: singapore
+    plan: free
+    envVars:
+      - key: PORT
+        value: "10000"
