@@ -1,0 +1,19 @@
+{
+  "envVars": [
+    {"key": "PORT", "value": "7860"},
+    {"key": "DATABASE_USER", "value": "avnadmin"},
+    {"key": "DATABASE_PASSWORD", "value": "AVNS_RLdM3I4ET4_4ozfXTcN"},
+    {"key": "DATABASE_NAME", "value": "defaultdb"},
+    {"key": "DATABASE_HOST", "value": "pg-752045-stanuserid-9476.a.aivencloud.com"},
+    {"key": "DATABASE_PORT", "value": "26183"},
+    {"key": "WORKERS", "value": "2"},
+    {"key": "CHANNEL_CAPACITY", "value": "100"},
+    {"key": "SUPERUSER_EMAIL", "value": "admin@pentaract.io"},
+    {"key": "SUPERUSER_PASS", "value": "Px9kL2mN7vQ4wR8tY5uI1oP3sA6dF0gH"},
+    {"key": "ACCESS_TOKEN_EXPIRE_IN_SECS", "value": "3600"},
+    {"key": "REFRESH_TOKEN_EXPIRE_IN_DAYS", "value": "30"},
+    {"key": "SECRET_KEY", "value": "bc117b7d93fafc8b78ddbb676916f84fdd0281305f8d052325d0922423374c01"},
+    {"key": "TELEGRAM_API_BASE_URL", "value": "https://api.telegram.org"},
+    {"key": "TELEGRAM_RATE_LIMIT", "value": "18"}
+  ]
+}

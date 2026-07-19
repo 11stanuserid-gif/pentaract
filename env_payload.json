@@ -1,0 +1,6 @@
+{
+  "envVars": {
+    "PORT": "7860",
+    "DATABASE_USER": "avnadmin"
+  }
+}
