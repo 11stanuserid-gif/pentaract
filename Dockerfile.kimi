@@ -1,0 +1,11 @@
+FROM python:3.12-slim
+
+RUN pip install --no-cache-dir kimi-code
+
+ENV UV_USE_IO_URING=0
+ENV LIBUV_NO_IO_URING=1
+ENV PORT=10000
+
+EXPOSE 10000
+
+CMD ["sh", "-c", "rm -f ~/.kimi/server/lock 2>/dev/null; kimi web --port ${PORT:-10000}"]
