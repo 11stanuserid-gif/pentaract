@@ -5,10 +5,16 @@ on:
     - cron: '*/5 * * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   keep-alive:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
       - name: Wake Codespace & Keep Alive
         env:
           GH_TOKEN: ${{ secrets.GH_CODESPACE_TOKEN }}
@@ -30,18 +36,17 @@ jobs:
               -H "Authorization: token $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               "https://api.github.com/user/codespaces/turbo-space-enigma-vpv5g6vp6pjxcwg6x/start"
-            echo "Waiting 90s for boot..."
-            sleep 90
+            echo "Waiting 120s for boot..."
+            sleep 120
           fi
           
           # SSH in and check services - this counts as activity!
-          echo "SSHing into codespace to check services..."
-          gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- \
-            "date && curl -s http://localhost:10000 > /dev/null 2>&1 && echo 'Kimi: UP' || echo 'Kimi: DOWN'"
+          echo "Checking services..."
+          gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "date && curl -s http://localhost:10000 > /dev/null 2>&1 && echo 'Kimi: UP' || echo 'Kimi: DOWN'"
           
-          # Get tunnel URL
+          # Get tunnel URL from logs
           URL=$(gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- \
-            "grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' /home/codespace/cf-live.log 2>/dev/null | tail -1" 2>/dev/null)
+            "grep -oP 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/tunnel.log 2>/dev/null | tail -1" 2>/dev/null)
           echo "Tunnel URL: $URL"
           
           # If kimi is down, restart
@@ -52,16 +57,31 @@ jobs:
             echo "Kimi down! Restarting..."
             gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- \
               "cd /home/codespace && bash start-all.sh"
+            sleep 15
+            URL=$(gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- \
+              "grep -oP 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/tunnel.log 2>/dev/null | tail -1" 2>/dev/null)
           fi
           
           # If tunnel is down, restart
-          TUNNEL_CHECK=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$URL" 2>/dev/null)
-          echo "Tunnel HTTP: $TUNNEL_CHECK"
-          
-          if [ "$TUNNEL_CHECK" = "000" ] || [ "$TUNNEL_CHECK" = "503" ]; then
+          if [ -z "$URL" ] || [ "$URL" = "" ]; then
             echo "Tunnel down! Restarting..."
             gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- \
-              "pkill -f cloudflared; sleep 2; nohup /home/codespace/cloudflared tunnel --url http://localhost:10000 &>/home/codespace/cf-live.log &"
+              "pkill -f cloudflared; sleep 2; nohup /home/codespace/cloudflared tunnel --url http://localhost:10000 &>/tmp/tunnel.log &"
+            sleep 15
+            URL=$(gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- \
+              "grep -oP 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/tunnel.log 2>/dev/null | tail -1" 2>/dev/null)
           fi
           
-          echo "Done!"
+          echo "Final URL: $URL"
+          
+          # Write URL to file in repo
+          echo "$URL" > docs/tunnel-url.txt
+          echo "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > docs/tunnel-updated.txt
+          
+          # Commit and push
+          git config user.name "Kimi Bot"
+          git config user.email "kimi@bot"
+          git add docs/tunnel-url.txt docs/tunnel-updated.txt
+          git diff --staged --quiet || git commit -m "Update tunnel URL: $URL" && git push
+          
+          echo "Done! URL saved to repo."
