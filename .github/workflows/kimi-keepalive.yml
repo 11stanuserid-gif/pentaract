@@ -1,0 +1,51 @@
+name: Kimi Keep Alive
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Keep Kimi Alive
+        env:
+          GH_TOKEN: ${{ secrets.GH_CODESPACE_TOKEN }}
+        run: |
+          echo "=== $(date) ==="
+          STATE=$(curl -s -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/user/codespaces/turbo-space-enigma-vpv5g6vp6pjxcwg6x" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('state','unknown'))")
+          echo "State: $STATE"
+          if [ "$STATE" = "Shutdown" ] || [ "$STATE" = "ShuttingDown" ]; then
+            curl -s -X POST -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/user/codespaces/turbo-space-enigma-vpv5g6vp6pjxcwg6x/start"
+            echo "Waiting 120s for boot..."
+            sleep 120
+          fi
+          gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "date"
+          KIMI=$(gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "curl -s http://localhost:10000 > /dev/null 2>&1 && echo up || echo down" 2>/dev/null)
+          echo "Kimi: $KIMI"
+          if [ "$KIMI" = "down" ]; then
+            gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "cd /home/codespace && bash start-all.sh"
+            sleep 15
+          fi
+          URL=$(gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "grep -oP 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/tunnel2.log 2>/dev/null | tail -1" 2>/dev/null)
+          if [ -z "$URL" ]; then
+            gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "pkill -f cloudflared; sleep 2; nohup /home/codespace/cloudflared tunnel --url http://localhost:10000 > /tmp/tunnel2.log 2>&1 &"
+            sleep 15
+            URL=$(gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "grep -oP 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/tunnel2.log 2>/dev/null | tail -1" 2>/dev/null)
+          fi
+          echo "Final URL: $URL"
+          
+          # Update kimi-code-live repo
+          mkdir -p /tmp/kimi-update
+          cd /tmp/kimi-update
+          git clone https://x-access-token:${GH_TOKEN}@github.com/11stanuserid-gif/kimi-code-live.git . 2>/dev/null || true
+          echo "$URL" > docs/tunnel-url.txt
+          date -u +%Y-%m-%dT%H:%M:%SZ > docs/tunnel-updated.txt
+          git config user.name "Bot" && git config user.email "bot@bot"
+          git add docs/tunnel-url.txt docs/tunnel-updated.txt
+          git diff --staged --quiet || git commit -m "URL: $URL" && git push
+          echo "Done!"
