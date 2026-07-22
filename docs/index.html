@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kimi Code - Dashboard</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Segoe UI',sans-serif;background:#0a0a1a;color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+        .c{text-align:center;padding:2rem;max-width:550px}
+        h1{font-size:2.2rem;margin-bottom:.3rem;background:linear-gradient(135deg,#667eea,#764ba2);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .sub{color:#888;margin-bottom:2rem;font-size:.95rem}
+        .box{background:#1a1a2e;border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;border:1px solid #333}
+        .st{font-size:1.1rem;margin-bottom:1rem;color:#ffaa00}
+        .st.ok{color:#00ff88}
+        .st.err{color:#ff4444}
+        .btn{padding:14px 36px;border:none;border-radius:8px;font-size:1.05rem;cursor:pointer;font-weight:bold;transition:all .3s}
+        .btn1{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff}
+        .btn1:hover{transform:scale(1.05);box-shadow:0 0 20px rgba(102,126,234,.4)}
+        .btn1:disabled{opacity:.5;cursor:not-allowed;transform:none}
+        .spin{border:3px solid #333;border-top:3px solid #667eea;border-radius:50%;width:28px;height:28px;animation:sp 1s linear infinite;margin:1rem auto;display:none}
+        @keyframes sp{to{transform:rotate(360deg)}}
+        .url{background:#0d1117;padding:1rem;border-radius:8px;word-break:break-all;font-family:monospace;font-size:.85rem;color:#58a6ff;margin:1rem 0;display:none;border:1px solid #333}
+        .url a{color:#58a6ff;text-decoration:none}
+        .url a:hover{text-decoration:underline}
+        .steps{text-align:left;font-size:.85rem;color:#8b949e;margin-top:1rem}
+        .steps li{margin:.5rem 0}
+        .step-num{color:#667eea;font-weight:bold}
+        .pulse{animation:p 2s infinite}
+        @keyframes p{0%,100%{opacity:1}50%{opacity:.5}}
+        .status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px}
+        .dot-green{background:#00ff88}
+        .dot-red{background:#ff4444}
+        .dot-yellow{background:#ffaa00}
+        .info{font-size:.8rem;color:#666;margin-top:2rem}
+    </style>
+</head>
+<body>
+<div class="c">
+    <h1>🧠 Kimi Code</h1>
+    <p class="sub">AI Coding Assistant - Always Ready</p>
+    
+    <div class="box">
+        <div id="st" class="st"><span class="status-dot dot-yellow"></span>Checking status...</div>
+        <div id="spinner" class="spin"></div>
+        <div id="urlBox" class="url"></div>
+        <button id="btn" class="btn btn1" style="display:none" onclick="startKimi()">🚀 Start Kimi Code</button>
+    </div>
+
+    <div class="box">
+        <p style="color:#888;font-size:.9rem;margin-bottom:.5rem"><strong>How it works:</strong></p>
+        <ul class="steps">
+            <li><span class="step-num">1.</span> Click "Start Kimi Code" button</li>
+            <li><span class="step-num">2.</span> Wait ~60 seconds for boot</li>
+            <li><span class="step-num">3.</span> Click the link that appears</li>
+            <li><span class="step-num">4.</span> Start coding with AI!</li>
+        </ul>
+    </div>
+    
+    <p class="info">Bookmark this page! URL never changes.</p>
+</div>
+
+<script>
+const REPO = "11stanuserid-gif/pentaract";
+const WF = "keep-alive.yml";
+
+function log(msg) { console.log(`[${new Date().toLocaleTimeString()}] ${msg}`); }
+
+function showStatus(msg, cls) {
+    document.getElementById('st').innerHTML = `<span class="status-dot dot-${cls === 'ok' ? 'green' : cls === 'err' ? 'red' : 'yellow'}"></span>${msg}`;
+    document.getElementById('st').className = 'st ' + cls;
+}
+
+function showUrl(url) {
+    const box = document.getElementById('urlBox');
+    box.style.display = 'block';
+    box.innerHTML = `<a href="${url}" target="_blank">${url}</a><br><br><button class="btn btn1" style="padding:10px 24px;font-size:.9rem" onclick="window.open('${url}','_blank')">Open in New Tab</button>`;
+    showStatus('✅ Kimi Code is LIVE!', 'ok');
+    document.getElementById('spinner').style.display = 'none';
+    document.getElementById('btn').style.display = 'none';
+}
+
+async function triggerWorkflow() {
+    try {
+        const r = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/${WF}/dispatches`, {
+            method: 'POST',
+            headers: { 'Accept': 'application/vnd.github+json' },
+            body: JSON.stringify({ ref: 'main' })
+        });
+        log(`Workflow trigger: ${r.status}`);
+        return r.status === 204;
+    } catch(e) { log('Trigger error: ' + e); return false; }
+}
+
+async function startKimi() {
+    const btn = document.getElementById('btn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Starting... (takes ~60s)';
+    document.getElementById('spinner').style.display = 'block';
+    showStatus('Starting services...', '');
+    
+    const ok = await triggerWorkflow();
+    if (ok) {
+        showStatus('⏳ Services starting... Please wait 60s', '');
+        // Wait and show the URL page
+        setTimeout(() => {
+            showStatus('✅ Should be ready! Click below:', 'ok');
+            document.getElementById('urlBox').style.display = 'block';
+            document.getElementById('urlBox').innerHTML = `
+                <p style="margin-bottom:10px">If Kimi Code doesn't load, click below to restart:</p>
+                <button class="btn btn1" style="padding:10px 24px;font-size:.9rem" onclick="location.reload()">🔄 Refresh & Check</button>
+                <br><br>
+                <a href="https://github.com/${REPO}/actions/workflows/${WF}" target="_blank" style="color:#58a6ff;font-size:.8rem">View workflow status</a>
+            `;
+            document.getElementById('spinner').style.display = 'none';
+            btn.style.display = 'none';
+        }, 65000);
+    } else {
+        showStatus('❌ Failed to start. Try again.', 'err');
+        document.getElementById('spinner').style.display = 'none';
+        btn.disabled = false;
+        btn.textContent = '🚀 Try Again';
+    }
+}
+
+// Auto check
+showStatus('Ready to start Kimi Code', '');
+document.getElementById('btn').style.display = 'inline-block';
+</script>
+</body>
+</html>
