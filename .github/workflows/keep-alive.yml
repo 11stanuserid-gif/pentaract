@@ -1,74 +1,67 @@
-name: Codespace + Kimi Keep Alive 24/7
+name: Kimi 24/7 Keep Alive
 
 on:
   schedule:
-    - cron: '*/25 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
   keep-alive:
     runs-on: ubuntu-latest
     steps:
-      - name: Check Codespace State
+      - name: Wake Codespace & Keep Alive
         env:
           GH_TOKEN: ${{ secrets.GH_CODESPACE_TOKEN }}
         run: |
           echo "=== $(date) ==="
+          
+          # Check codespace state
           STATE=$(curl -s \
             -H "Authorization: token $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/user/codespaces/turbo-space-enigma-vpv5g6vp6pjxcwg6x" \
             | python3 -c "import sys,json; print(json.load(sys.stdin).get('state','unknown'))")
-          echo "Codespace state: $STATE"
-
+          echo "State: $STATE"
+          
+          # If stopped, start it
           if [ "$STATE" = "Shutdown" ] || [ "$STATE" = "ShuttingDown" ]; then
             echo "Starting codespace..."
             curl -s -X POST \
               -H "Authorization: token $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               "https://api.github.com/user/codespaces/turbo-space-enigma-vpv5g6vp6pjxcwg6x/start"
-            echo "Waiting 60s for codespace to boot..."
-            sleep 60
+            echo "Waiting 90s for boot..."
+            sleep 90
           fi
-
-      - name: Check & Restart Services
-        env:
-          GH_TOKEN: ${{ secrets.GH_CODESPACE_TOKEN }}
-        run: |
-          echo "Checking services in codespace..."
-          ssh_cmd="GH_TOKEN=$GH_TOKEN gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x --"
-
-          # Check kimi
-          KIMI_UP=$(eval $ssh_cmd "curl -s http://localhost:10000 > /dev/null 2>&1 && echo yes || echo no")
-          echo "Kimi running: $KIMI_UP"
-
-          if [ "$KIMI_UP" = "no" ]; then
-            echo "Running start-all.sh..."
-            eval $ssh_cmd "cd /home/codespace && bash start-all.sh"
+          
+          # SSH in and check services - this counts as activity!
+          echo "SSHing into codespace to check services..."
+          gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- \
+            "date && curl -s http://localhost:10000 > /dev/null 2>&1 && echo 'Kimi: UP' || echo 'Kimi: DOWN'"
+          
+          # Get tunnel URL
+          URL=$(gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- \
+            "grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' /home/codespace/cf-live.log 2>/dev/null | tail -1" 2>/dev/null)
+          echo "Tunnel URL: $URL"
+          
+          # If kimi is down, restart
+          KIMI_CHECK=$(gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- \
+            "curl -s http://localhost:10000 > /dev/null 2>&1 && echo up || echo down" 2>/dev/null)
+          
+          if [ "$KIMI_CHECK" = "down" ]; then
+            echo "Kimi down! Restarting..."
+            gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- \
+              "cd /home/codespace && bash start-all.sh"
           fi
-
-          # Check tunnel
-          TUNNEL_URL=$(eval $ssh_cmd "grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' /home/codespace/cf-live.log 2>/dev/null | tail -1")
-          echo "Tunnel URL: $TUNNEL_URL"
-
-          if [ -z "$TUNNEL_URL" ]; then
-            echo "No tunnel URL! Restarting services..."
-            eval $ssh_cmd "cd /home/codespace && bash start-all.sh"
-          else
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$TUNNEL_URL")
-            echo "Tunnel HTTP: $HTTP_CODE"
-            if [ "$HTTP_CODE" = "000" ] || [ "$HTTP_CODE" = "503" ]; then
-              echo "Tunnel down! Restarting..."
-              eval $ssh_cmd "pkill -f cloudflared 2>/dev/null; sleep 2; nohup /home/codespace/cloudflared tunnel --url http://localhost:10000 &>/home/codespace/cf-live.log &"
-            fi
+          
+          # If tunnel is down, restart
+          TUNNEL_CHECK=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$URL" 2>/dev/null)
+          echo "Tunnel HTTP: $TUNNEL_CHECK"
+          
+          if [ "$TUNNEL_CHECK" = "000" ] || [ "$TUNNEL_CHECK" = "503" ]; then
+            echo "Tunnel down! Restarting..."
+            gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- \
+              "pkill -f cloudflared; sleep 2; nohup /home/codespace/cloudflared tunnel --url http://localhost:10000 &>/home/codespace/cf-live.log &"
           fi
-
-      - name: Final Status
-        env:
-          GH_TOKEN: ${{ secrets.GH_CODESPACE_TOKEN }}
-        run: |
-          ssh_cmd="GH_TOKEN=$GH_TOKEN gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x --"
-          FINAL_URL=$(eval $ssh_cmd "grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' /home/codespace/cf-live.log 2>/dev/null | tail -1")
-          echo "========================================"
-          echo "FINAL URL: ${FINAL_URL}?token=VNE1wpc7gqGD1THY-Np6WRPYdU5LlOrk3ICvxsy_N58"
-          echo "========================================"
+          
+          echo "Done!"
