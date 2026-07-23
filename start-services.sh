@@ -56,11 +56,13 @@ echo ""
 echo "--- Configuring Kimi password ---"
 npx -y @moonshot-ai/kimi-code@0.21.0 config set server_password "VNE1wpc7gqGD1THY-Np6WRPYdU5LlOrk3ICvxsy_N58" 2>/dev/null || true
 
-echo "--- Starting Kimi Code Server with allowed-host: $TUNNEL_URL ---"
+# Extract just the hostname from the tunnel URL
+TUNNEL_HOST=$(echo "$TUNNEL_URL" | sed 's|https://||')
+echo "--- Starting Kimi Code Server with allowed-host: $TUNNEL_HOST ---"
 nohup npx -y @moonshot-ai/kimi-code@0.21.0 server run \
     --port 10000 --host --insecure-no-tls --log-level info \
     --allow-remote-terminals --allow-remote-shutdown \
-    --allowed-host "$TUNNEL_URL" \
+    --allowed-host "$TUNNEL_HOST" \
     > /tmp/kimi-startup.log 2>&1 &
 KIMI_PID=$!
 echo "Kimi PID: $KIMI_PID"
