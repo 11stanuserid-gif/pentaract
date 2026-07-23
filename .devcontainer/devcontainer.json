@@ -2,6 +2,7 @@
     "name": "Pentaract + Kimi Code",
     "image": "mcr.microsoft.com/devcontainers/universal:2",
     "postCreateCommand": "bash .devcontainer/setup-kimi.sh",
+    "postStartCommand": "bash /workspaces/pentaract/start-kimi.sh",
     "forwardPorts": [10000],
     "portsAttributes": {
         "10000": {
