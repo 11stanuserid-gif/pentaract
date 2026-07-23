@@ -26,19 +26,22 @@ jobs:
             sleep 120
           fi
           
-          # Ensure Kimi and cloudflared are running
-          gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "date" 2>/dev/null || echo "SSH_1_FAILED"
+          # Git pull latest code on codespace
+          gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "cd /workspaces/pentaract && git pull" 2>&1 || echo "GIT_PULL_FAILED"
+          
+          # Debug: check what's available
+          gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "ls -la /workspaces/pentaract/start-services.sh; which kimi 2>&1; which cloudflared 2>&1; which node 2>&1; echo '---'" 2>&1 || echo "DEBUG_SSH_FAILED"
           
           # Restart services to ensure they run (idempotent)
-          gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "bash /workspaces/pentaract/start-services.sh" 2>/dev/null || echo "START_FAILED"
+          gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "bash /workspaces/pentaract/start-services.sh" 2>&1 || echo "START_FAILED"
           
           # Wait for cloudflared to connect and get URL
-          sleep 35
+          sleep 40
           
           # Get tunnel URL with retry
           URL=""
           for i in 1 2 3; do
-            URL=$(gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "grep -oP 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/tunnel2.log 2>/dev/null | tail -1" 2>/dev/null)
+            URL=$(gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "grep -oP 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/tunnel2.log 2>/dev/null | tail -1" 2>&1)
             if [ -n "$URL" ]; then break; fi
             sleep 15
           done
