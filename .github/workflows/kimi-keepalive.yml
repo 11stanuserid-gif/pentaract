@@ -30,7 +30,7 @@ jobs:
           gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "date" 2>/dev/null || echo "SSH_1_FAILED"
           
           # Restart services to ensure they run (idempotent)
-          gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "bash /workspaces/pentaract/start-kimi.sh" 2>/dev/null || echo "START_FAILED"
+          gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "bash /workspaces/pentaract/start-services.sh" 2>/dev/null || echo "START_FAILED"
           
           # Wait for cloudflared to connect and get URL
           sleep 35
