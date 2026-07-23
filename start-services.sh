@@ -7,37 +7,61 @@ set +e
 echo "=== start-services.sh ==="
 
 # Kill existing processes
-pkill -f "kimi server" 2>/dev/null || true
+pkill -f "kimi" 2>/dev/null || true
 pkill -f cloudflared 2>/dev/null || true
 sleep 2
 
-# Check if kimi binary exists
-KIMI_PATH=""
-if command -v kimi &>/dev/null; then
-    KIMI_PATH=$(command -v kimi)
-elif [ -f /home/codespace/.local/bin/kimi ]; then
-    KIMI_PATH="/home/codespace/.local/bin/kimi"
-elif [ -f /usr/local/bin/kimi ]; then
-    KIMI_PATH="/usr/local/bin/kimi"
+# --- Find the right kimi binary ---
+# The codespace has kimi v1.49.0 (Python) which doesn't have 'server' command
+# We need @moonshot-ai/kimi-code v0.x which has 'kimi server run'
+
+KIMI_BIN=""
+KIMI_TYPE=""
+
+# Check all possible locations
+for candidate in /home/codespace/.python/current/bin/kimi /usr/local/bin/kimi /home/codespace/.local/bin/kimi /usr/bin/kimi; do
+    if [ -x "$candidate" ]; then
+        VER=$("$candidate" --version 2>/dev/null | head -1)
+        echo "Found kimi at $candidate (version: $VER)"
+    fi
+done
+
+# Check npm global install
+NPM_KIMI=""
+if command -v npx &>/dev/null; then
+    echo "npx available, can use @moonshot-ai/kimi-code"
+fi
+if command -v node &>/dev/null; then
+    NPM_GLOBAL=$(npm root -g 2>/dev/null)
+    if [ -f "$NPM_GLOBAL/@moonshot-ai/kimi-code/index.js" ] || [ -f "$NPM_GLOBAL/@moonshot-ai/kimi-code/cli.js" ]; then
+        echo "Found npm kimi-code at $NPM_GLOBAL/@moonshot-ai/kimi-code"
+    fi
 fi
 
-echo "Kimi binary: ${KIMI_PATH:-not found}"
+# Strategy: Use npx to run the right kimi version
+# This avoids PATH conflicts and ensures we get v0.21.0 which has 'server run'
+echo ""
+echo "--- Configuring Kimi password ---"
+npx -y @moonshot-ai/kimi-code@0.21.0 config set server_password "VNE1wpc7gqGD1THY-Np6WRPYdU5LlOrk3ICvxsy_N58" 2>/dev/null || true
 
-if [ -n "$KIMI_PATH" ]; then
-    # Start Kimi server
-    echo "Starting Kimi on port 10000..."
-    nohup "$KIMI_PATH" server run --port 10000 --host --insecure-no-tls --allow-remote-terminals --allow-remote-shutdown > /tmp/kimi-startup.log 2>&1 &
-    sleep 8
+echo "--- Starting Kimi Code Server (via npx @moonshot-ai/kimi-code@0.21.0) ---"
+nohup npx -y @moonshot-ai/kimi-code@0.21.0 server run \
+    --port 10000 --host --insecure-no-tls --log-level info \
+    --allow-remote-terminals --allow-remote-shutdown \
+    > /tmp/kimi-startup.log 2>&1 &
+KIMI_PID=$!
+echo "Kimi PID: $KIMI_PID"
+sleep 10
 
-    # Check if Kimi is running
-    if curl -s -o /dev/null -w "" http://localhost:10000/ 2>/dev/null; then
-        echo "Kimi: UP"
-    else
-        echo "Kimi: FAILED (port 10000 not responding)"
-        cat /tmp/kimi-startup.log 2>/dev/null | tail -10
-    fi
+# Check if Kimi is running
+if curl -s -o /dev/null -w "" http://localhost:10000/ 2>/dev/null; then
+    echo "Kimi: UP"
 else
-    echo "Kimi: SKIPPED (binary not available)"
+    echo "Kimi: FAILED (port 10000 not responding)"
+    cat /tmp/kimi-startup.log 2>/dev/null | tail -10
+    echo ""
+    echo "--- Trying alternative: kimi directly with --help ---"
+    kimi --help 2>&1 | head -30 || true
 fi
 
 # Install cloudflared if not present
