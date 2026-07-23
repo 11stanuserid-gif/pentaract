@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.11-alpine
 
 RUN pip install --no-cache-dir kimi-code==1.49.0
 
