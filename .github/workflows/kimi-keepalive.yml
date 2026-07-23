@@ -30,7 +30,7 @@ jobs:
           gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "cd /workspaces/pentaract && git pull" 2>&1 || echo "GIT_PULL_FAILED"
           
           # Debug: check what's available
-          gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "ls -la /workspaces/pentaract/start-services.sh; which kimi 2>&1; kimi --version 2>&1; kimi -h 2>&1 | head -20; echo '---'" 2>&1 || echo "DEBUG_SSH_FAILED"
+          gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "ls -la /workspaces/pentaract/start-services.sh; which kimi 2>&1; kimi --version 2>&1; kimi -h 2>&1; echo '==='; kimi run --help 2>&1 || true; echo '==='" 2>&1 || echo "DEBUG_SSH_FAILED"
           
           # Restart services to ensure they run (idempotent)
           gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "bash /workspaces/pentaract/start-services.sh" 2>&1 || echo "START_FAILED"
