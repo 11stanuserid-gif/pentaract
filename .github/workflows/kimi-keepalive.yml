@@ -29,9 +29,6 @@ jobs:
           # Git pull latest code on codespace
           gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "cd /workspaces/pentaract && git pull" 2>&1 || echo "GIT_PULL_FAILED"
           
-          # Debug: check what's available
-          gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "ls -la /workspaces/pentaract/start-services.sh; which kimi 2>&1; kimi --version 2>&1; kimi -h 2>&1; echo '==='; kimi run --help 2>&1 || true; echo '==='" 2>&1 || echo "DEBUG_SSH_FAILED"
-          
           # Restart services to ensure they run (idempotent)
           gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "bash /workspaces/pentaract/start-services.sh" 2>&1 || echo "START_FAILED"
           
@@ -49,10 +46,10 @@ jobs:
           echo "Final URL: $URL"
           
           # Update kimi-code-live dashboard repo
-          mkdir -p /tmp/kimi-update/docs
+          cd /tmp || exit 1
+          rm -rf /tmp/kimi-update
+          git clone https://x-access-token:${GH_TOKEN}@github.com/11stanuserid-gif/kimi-code-live.git /tmp/kimi-update 2>&1 || echo "CLONE_FAILED"
           cd /tmp/kimi-update || exit 1
-          rm -rf .git 2>/dev/null
-          git clone https://x-access-token:${GH_TOKEN}@github.com/11stanuserid-gif/kimi-code-live.git . 2>/dev/null
           if [ -d .git ]; then
             mkdir -p docs
             echo "$URL" > docs/tunnel-url.txt

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script to start Kimi Code Server + cloudflared tunnel on codespace
+# Script to start Kimi Code Web (v1.49.0) + cloudflared tunnel on codespace
 set +e
 
 echo "=== start-services.sh ==="
@@ -27,7 +27,6 @@ fi
 echo "cloudflared: $(command -v cloudflared || echo $CF_PATH)"
 
 # Step 1: Start cloudflared first to get a tunnel URL
-# It's OK if nothing is on port 10000 yet - cloudflared will show 502
 echo "Starting cloudflared tunnel (phase 1)..."
 nohup "$CF_PATH" tunnel --url http://localhost:10000 > /tmp/tunnel2.log 2>&1 &
 CF_PID=$!
@@ -51,29 +50,25 @@ if [ -z "$TUNNEL_URL" ]; then
     exit 1
 fi
 
-# Step 2: Start Kimi Code Server with the tunnel URL as allowed host
+# Step 2: Start Kimi Code Web UI (v1.49.0) - no auth needed behind cloudflare tunnel
 echo ""
-echo "--- Configuring Kimi password ---"
-npx -y @moonshot-ai/kimi-code@0.21.0 config set server_password "VNE1wpc7gqGD1THY-Np6WRPYdU5LlOrk3ICvxsy_N58" 2>/dev/null || true
-
-# Extract just the hostname from the tunnel URL
-TUNNEL_HOST=$(echo "$TUNNEL_URL" | sed 's|https://||')
-echo "--- Starting Kimi Code Server with allowed-host: $TUNNEL_HOST ---"
-nohup npx -y @moonshot-ai/kimi-code@0.21.0 server run \
-    --port 10000 --host --insecure-no-tls --log-level info \
-    --allow-remote-terminals --allow-remote-shutdown \
-    --allowed-host "$TUNNEL_HOST" \
+echo "--- Starting Kimi Code Web UI v1.49.0 (no password) ---"
+nohup kimi web \
+    --host 0.0.0.0 \
+    --port 10000 \
+    --no-open \
+    --dangerously-omit-auth \
     > /tmp/kimi-startup.log 2>&1 &
 KIMI_PID=$!
 echo "Kimi PID: $KIMI_PID"
-sleep 10
+sleep 8
 
 # Check if Kimi is running
 if curl -s -o /dev/null -w "" http://localhost:10000/ 2>/dev/null; then
-    echo "Kimi: UP"
+    echo "Kimi: UP (v1.49.0, no password)"
 else
     echo "Kimi: FAILED (port 10000 not responding)"
-    cat /tmp/kimi-startup.log 2>/dev/null | tail -10
+    cat /tmp/kimi-startup.log 2>/dev/null | tail -15
 fi
 
 echo ""
