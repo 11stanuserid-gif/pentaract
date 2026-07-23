@@ -1,15 +1,6 @@
-FROM alpine:3.19
+FROM python:3.11-slim
 
-RUN apk add --no-cache curl
-
-# Install kimi v1.49.0 binary for aarch64
-RUN curl -sL "https://github.com/MoonshotAI/kimi-cli/releases/download/1.49.0/kimi-1.49.0-aarch64-unknown-linux-gnu-onedir.tar.gz" \
-    -o /tmp/kimi.tar.gz && \
-    mkdir -p /opt/kimi && \
-    tar xzf /tmp/kimi.tar.gz -C /opt/kimi && \
-    rm /tmp/kimi.tar.gz && \
-    find /opt/kimi -name kimi -type f | head -1 | xargs -I{} ln -sf {} /usr/local/bin/kimi && \
-    kimi --version
+RUN pip install --no-cache-dir kimi-code==1.49.0
 
 EXPOSE 10000
 
