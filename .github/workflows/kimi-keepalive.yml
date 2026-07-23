@@ -26,22 +26,23 @@ jobs:
             sleep 120
           fi
           
-          # Check SSH and Kimi status
+          # Ensure Kimi and cloudflared are running
           gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "date" 2>/dev/null || echo "SSH_1_FAILED"
-          KIMI=$(gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "curl -s http://localhost:10000 > /dev/null 2>&1 && echo up || echo down" 2>/dev/null)
-          echo "Kimi: $KIMI"
-          if [ "$KIMI" = "down" ] || [ -z "$KIMI" ]; then
-            gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "bash /workspaces/pentaract/start-kimi.sh" 2>/dev/null || echo "START_FAILED"
-            sleep 15
-          fi
           
-          # Get tunnel URL
-          URL=$(gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "grep -oP 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/tunnel2.log 2>/dev/null | tail -1" 2>/dev/null)
-          if [ -z "$URL" ]; then
-            gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "pkill -f cloudflared 2>/dev/null || true; nohup /home/codespace/cloudflared tunnel --url http://localhost:10000 > /tmp/tunnel2.log 2>&1 & sleep 3" 2>/dev/null || echo "TUNNEL_START_FAILED"
-            sleep 20
+          # Restart services to ensure they run (idempotent)
+          gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "bash /workspaces/pentaract/start-kimi.sh" 2>/dev/null || echo "START_FAILED"
+          
+          # Wait for cloudflared to connect and get URL
+          sleep 35
+          
+          # Get tunnel URL with retry
+          URL=""
+          for i in 1 2 3; do
             URL=$(gh codespace ssh -c turbo-space-enigma-vpv5g6vp6pjxcwg6x -- "grep -oP 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/tunnel2.log 2>/dev/null | tail -1" 2>/dev/null)
-          fi
+            if [ -n "$URL" ]; then break; fi
+            sleep 15
+          done
+          
           echo "Final URL: $URL"
           
           # Update kimi-code-live dashboard repo
